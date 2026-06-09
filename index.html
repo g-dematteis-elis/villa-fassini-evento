@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mappa Evento - Villa Fassini ELIS</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #fff; height: 100vh; display: flex; flex-direction: column; }
+
+    header {
+      background: linear-gradient(135deg, #0f3460, #16213e);
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+      z-index: 1000; flex-shrink: 0;
+    }
+    header h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: 0.5px; }
+    header span { font-size: 0.85rem; color: #a0aec0; }
+
+    .content { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Agenda ── */
+    #agenda {
+      width: 290px; flex-shrink: 0;
+      background: #16213e;
+      border-right: 1px solid rgba(255,255,255,0.08);
+      display: flex; flex-direction: column; overflow-y: auto;
+    }
+    #agenda::-webkit-scrollbar { width: 4px; }
+    #agenda::-webkit-scrollbar-track { background: transparent; }
+    #agenda::-webkit-scrollbar-thumb { background: rgba(99,179,237,0.3); border-radius: 2px; }
+
+    #agenda-header {
+      padding: 14px 18px 12px;
+      background: rgba(15,52,96,0.6);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0; position: sticky; top: 0; z-index: 2;
+    }
+    #agenda-header h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.2px; color: #63b3ed; }
+
+    #agenda-list { padding: 8px 0 20px; }
+
+    .agenda-slot {
+      display: flex; gap: 12px;
+      padding: 10px 16px 10px 14px;
+      border-left: 3px solid transparent;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .agenda-slot[data-marker] { cursor: pointer; }
+    .agenda-slot[data-marker]:hover { background: rgba(99,179,237,0.08); border-left-color: rgba(99,179,237,0.5); }
+    .agenda-slot.active { background: rgba(99,179,237,0.12); border-left-color: #63b3ed; }
+
+    .agenda-time { font-size: 0.78rem; font-weight: 700; color: #63b3ed; min-width: 40px; padding-top: 2px; white-space: nowrap; }
+    .agenda-body { flex: 1; min-width: 0; }
+    .agenda-title { font-size: 0.86rem; font-weight: 600; color: #e2e8f0; margin-bottom: 3px; line-height: 1.3; }
+    .agenda-sub { font-size: 0.73rem; color: #718096; line-height: 1.4; margin-bottom: 5px; }
+    .agenda-time-range {
+      display: inline-block; font-size: 0.68rem; color: #4a90d9;
+      background: rgba(74,144,217,0.12); border: 1px solid rgba(74,144,217,0.25);
+      border-radius: 4px; padding: 1px 6px; margin-bottom: 5px;
+    }
+    .agenda-category { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.8px; color: #4a90d9; margin: 5px 0 3px; }
+    .agenda-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px; }
+    .agenda-tag {
+      font-size: 0.67rem;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 4px; padding: 1px 6px; color: #a0aec0;
+    }
+    .agenda-speakers { margin-top: 5px; }
+    .agenda-speaker { font-size: 0.72rem; color: #a0aec0; padding: 1px 0; line-height: 1.5; }
+    .agenda-speaker span { color: #718096; }
+    .agenda-tavolo { font-size: 0.73rem; color: #cbd5e0; padding: 2px 0; line-height: 1.4; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .agenda-tavolo:last-child { border-bottom: none; }
+    .agenda-tavolo-num { color: #63b3ed; font-weight: 700; margin-right: 4px; }
+    .agenda-divider { height: 1px; background: rgba(255,255,255,0.05); margin: 4px 16px; }
+
+    /* ── Mappa ── */
+    #map-wrapper { flex: 1; position: relative; }
+    #map { width: 100%; height: 100%; }
+
+    #sidebar {
+      position: absolute; top: 16px; right: 16px; width: 190px;
+      background: rgba(15,52,96,0.92); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 12px;
+      padding: 14px; z-index: 1000; box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+    #sidebar h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #63b3ed; margin-bottom: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; font-size: 0.83rem; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; border: 2px solid rgba(255,255,255,0.3); }
+    .legend-dot.square { border-radius: 3px; }
+
+    #layer-toggle {
+      position: absolute; top: 16px; left: 16px; z-index: 1000;
+      background: rgba(15,52,96,0.92); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+      padding: 8px 14px; font-size: 0.82rem;
+    }
+    #layer-toggle label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: #e2e8f0; }
+    #layer-toggle input { accent-color: #63b3ed; }
+
+    .leaflet-popup-content-wrapper {
+      background: #0f3460; color: #fff;
+      border: 1px solid rgba(99,179,237,0.4); border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    .leaflet-popup-tip { background: #0f3460; }
+    .leaflet-popup-content { margin: 12px 16px; }
+    .popup-title { font-weight: 700; font-size: 1rem; margin-bottom: 4px; }
+    .popup-desc { font-size: 0.82rem; color: #a0aec0; }
+
+    .custom-tooltip {
+      background: rgba(15,52,96,0.95); border: 1px solid rgba(99,179,237,0.4);
+      border-radius: 6px; color: #fff; font-size: 0.82rem; font-weight: 600;
+      padding: 4px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.4); white-space: nowrap;
+    }
+    .custom-tooltip::before { display: none; }
+
+    #coords {
+      position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
+      z-index: 1000; background: rgba(0,0,0,0.55); padding: 5px 14px;
+      border-radius: 20px; font-size: 0.75rem; color: #cbd5e0; pointer-events: none;
+    }
+
+    /* ── Modal pianta ── */
+    #floor-modal {
+      display: none; position: fixed; inset: 0; z-index: 9000;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+      align-items: center; justify-content: center; padding: 32px;
+    }
+    #floor-modal.open { display: flex; }
+    #modal-panel {
+      background: #0f2040; border: 1px solid rgba(99,179,237,0.25);
+      border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+      max-width: 900px; width: 100%; max-height: 90vh;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 22px; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0;
+    }
+    #modal-title { font-size: 1rem; font-weight: 700; color: #e2e8f0; }
+    #modal-subtitle { font-size: 0.78rem; color: #63b3ed; margin-top: 2px; }
+    #modal-close {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+      color: #fff; border-radius: 8px; width: 32px; height: 32px;
+      font-size: 1.1rem; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; transition: background 0.15s; flex-shrink: 0;
+    }
+    #modal-close:hover { background: rgba(255,255,255,0.16); }
+    #modal-body { overflow-y: auto; padding: 20px 22px; flex: 1; }
+    #modal-body::-webkit-scrollbar { width: 4px; }
+    #modal-body::-webkit-scrollbar-thumb { background: rgba(99,179,237,0.3); border-radius: 2px; }
+    #modal-img { width: 100%; border-radius: 8px; display: block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Mappa Evento — Villa Fassini ELIS</h1>
+    <span>Roma · Casal Bruciato</span>
+  </div>
+</header>
+
+<div class="content">
+
+  <!-- ── Agenda ── -->
+  <div id="agenda">
+    <div id="agenda-header"><h2>Programma</h2></div>
+    <div id="agenda-list">
+
+      <div class="agenda-slot" data-marker="Accredito">
+        <div class="agenda-time">09:00</div>
+        <div class="agenda-body">
+          <div class="agenda-title">Accreditamento</div>
+        </div>
+      </div>
+      <div class="agenda-divider"></div>
+
+      <div class="agenda-slot" data-marker="Villa Fassini">
+        <div class="agenda-time">10:00</div>
+        <div class="agenda-body">
+          <div class="agenda-title">Open Innovation 2025: Results</div>
+          <div class="agenda-sub">Inspirational Speech, Sharing e premiazione progetti di Co-innovazione Corporate-Startup e Territorial</div>
+          <div class="agenda-category">Progetti Business</div>
+          <div class="agenda-tags">
+            <span class="agenda-tag">CDP &amp; Autostrade</span>
+            <span class="agenda-tag">Gruppo FS</span>
+            <span class="agenda-tag">ENAV</span>
+            <span class="agenda-tag">Leonardo</span>
+            <span class="agenda-tag">Lactalis</span>
+            <span class="agenda-tag">Poste Italiane</span>
+            <span class="agenda-tag">Fincantieri &amp; Terna</span>
+            <span class="agenda-tag">Terna Innovation Zone Tunisi</span>
+          </div>
+          <div class="agenda-category">Progetti Territoriali</div>
+          <div class="agenda-tags">
+            <span class="agenda-tag">Palazzetti</span>
+            <span class="agenda-tag">ASL Lecce</span>
+            <span class="agenda-tag">Comune di Lecce – AQP</span>
+            <span class="agenda-tag">HTDI</span>
+            <span class="agenda-tag">HiRef</span>
+            <span class="agenda-tag">DaVià</span>
+          </div>
+        </div>
+      </div>
+      <div class="agenda-divider"></div>
+
+      <div class="agenda-slot" data-marker="Fiera">
+        <div class="agenda-time">12:00</div>
+        <div class="agenda-body">
+          <div class="agenda-title">Fiera Startup, Imprese Impact, Progetti</div>
+          <div class="agenda-time-range">fino alle 14:30</div>
+          <div class="agenda-sub">Possibilità di dialogare con le startup, imprese e scoprire i progetti di innovazione</div>
+        </div>
+      </div>
+      <div class="agenda-divider"></div>
+
+      <div class="agenda-slot" data-marker="Buffet">
+        <div class="agenda-time">13:00</div>
+        <div class="agenda-body">
+          <div class="agenda-title">Light Lunch e Networking</div>
+        </div>
+      </div>
+      <div class="agenda-divider"></div>
+
+      <div class="agenda-slot" data-marker="Accredito">
+        <div class="agenda-time">14:00</div>
+        <div class="agenda-body">
+          <div class="agenda-title">Accreditamento</div>
+        </div>
+      </div>
+      <div class="agenda-divider"></div>
+
+      <div class="agenda-slot" data-marker="Villa Fassini">
+        <div class="agenda-time">14:30</div>
+        <div class="agenda-body">
+          <div class="agenda-title">Open Innovation 2030: Innovation Together to Impact</div>
+          <div class="agenda-sub">Perché l'ecosistema multistakeholder crea valore: dimensioni e leve principali</div>
+          <div class="agenda-speakers">
+            <div class="agenda-speaker">Luciano De Propris <span>· Dir. Open Innovation, ELIS</span></div>
+            <div class="agenda-speaker">Pietro Papoff <span>· Dir. Consorzio ELIS</span></div>
+            <div class="agenda-speaker">Andrea Ferrazzi <span>· DG Confindustria Belluno Dolomiti</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="agenda-divider"></div>
+
+      <div class="agenda-slot" data-marker="Villino">
+        <div class="agenda-time">15:30</div>
+        <div class="agenda-body">
+          <div class="agenda-title">Collaborative Workshop</div>
+          <div class="agenda-sub">Tavoli di lavoro — Co-progettare iniziative multistakeholder</div>
+          <div class="agenda-speakers">
+            <div class="agenda-tavolo"><span class="agenda-tavolo-num">1.</span>Preparing to scale</div>
+            <div class="agenda-tavolo"><span class="agenda-tavolo-num">2.</span>Social &amp; Sustainability</div>
+            <div class="agenda-tavolo"><span class="agenda-tavolo-num">3.</span>Territorial Innovation</div>
+            <div class="agenda-tavolo"><span class="agenda-tavolo-num">4.</span>Impact Evaluation</div>
+            <div class="agenda-tavolo"><span class="agenda-tavolo-num">5.</span>I changemaker come moltiplicatori di valore</div>
+          </div>
+        </div>
+      </div>
+      <div class="agenda-divider"></div>
+
+      <div class="agenda-slot" data-marker="Villa Fassini">
+        <div class="agenda-time">16:30</div>
+        <div class="agenda-body">
+          <div class="agenda-title">Closing</div>
+        </div>
+      </div>
+      <div class="agenda-divider"></div>
+
+      <div class="agenda-slot" data-marker="Buffet">
+        <div class="agenda-time">17:00</div>
+        <div class="agenda-body">
+          <div class="agenda-title">Network Aperitif</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Mappa ── -->
+  <div id="map-wrapper">
+    <div id="layer-toggle">
+      <label><input type="checkbox" id="toggle-satellite" checked> Satellite</label>
+    </div>
+    <div id="sidebar">
+      <h3>Legenda</h3>
+      <div id="legend-list"></div>
+    </div>
+    <div id="map"></div>
+    <div id="coords">Muovi il mouse sulla mappa</div>
+  </div>
+
+</div>
+
+<!-- ── Modal pianta ── -->
+<div id="floor-modal">
+  <div id="modal-panel">
+    <div id="modal-header">
+      <div>
+        <div id="modal-title">Pianta</div>
+        <div id="modal-subtitle">Piano Rialzato · Piano Seminterrato</div>
+      </div>
+      <button id="modal-close">✕</button>
+    </div>
+    <div id="modal-body">
+      <img id="modal-img" src="" alt="Pianta">
+    </div>
+  </div>
+</div>
+
+<script>
+  const CENTER = [41.90798, 12.554092];
+  const ZOOM = 18;
+
+  const satellite = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles © Esri', maxZoom: 21 }
+  );
+  const streets = L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { attribution: '© OpenStreetMap contributors', maxZoom: 21 }
+  );
+
+  const map = L.map('map', { center: CENTER, zoom: ZOOM, layers: [satellite], zoomControl: true });
+
+  document.getElementById('toggle-satellite').addEventListener('change', function() {
+    if (this.checked) { map.removeLayer(streets); map.addLayer(satellite); }
+    else { map.removeLayer(satellite); map.addLayer(streets); }
+  });
+
+  // ── Icone ──
+  function makeIcon(color) {
+    return L.divIcon({
+      html: `<div style="width:20px;height:20px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);"></div>`,
+      iconSize: [20,20], iconAnchor: [10,10], popupAnchor: [0,-14], className: ''
+    });
+  }
+  function makeParkingIcon() {
+    return L.divIcon({
+      html: `<div style="width:22px;height:22px;border-radius:5px;background:#4a5568;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;font-family:sans-serif;">P</div>`,
+      iconSize: [22,22], iconAnchor: [11,11], popupAnchor: [0,-14], className: ''
+    });
+  }
+
+  const markerList = [];
+  const markerMap = {};
+
+  // ── Modal pianta ──
+  function openFloorPlan(title, imageSrc) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-img').src = imageSrc;
+    document.getElementById('floor-modal').classList.add('open');
+  }
+  document.getElementById('modal-close').addEventListener('click', () => {
+    document.getElementById('floor-modal').classList.remove('open');
+  });
+  document.getElementById('floor-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('floor-modal'))
+      document.getElementById('floor-modal').classList.remove('open');
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') document.getElementById('floor-modal').classList.remove('open');
+  });
+
+  // ── Marker standard ──
+  function addMarker(latlng, title, description, color = '#f6ad55', floorPlan = null) {
+    const tooltipText = floorPlan ? title + ' 🗺' : title;
+    const popupBtn = floorPlan
+      ? `<button onclick="openFloorPlan('${title}','${floorPlan}')"
+           style="margin-top:8px;padding:5px 12px;background:#1a56a0;border:none;color:#fff;border-radius:6px;cursor:pointer;font-size:0.8rem;">
+           🗺 Vedi pianta
+         </button>`
+      : '';
+    const m = L.marker(latlng, { icon: makeIcon(color) })
+      .addTo(map)
+      .bindTooltip(tooltipText, { permanent: false, direction: 'top', offset: [0,-12], className: 'custom-tooltip' })
+      .bindPopup(`<div class="popup-title">${title}</div><div class="popup-desc">${description}</div>${popupBtn}`);
+    markerList.push({ latlng, title, description, color, square: false });
+    markerMap[title] = m;
+    updateLegend();
+    return m;
+  }
+
+  // ── Marker parcheggio ──
+  function addParking(latlng, label) {
+    const m = L.marker(latlng, { icon: makeParkingIcon() })
+      .addTo(map)
+      .bindTooltip(label, { permanent: false, direction: 'top', offset: [0,-14], className: 'custom-tooltip' });
+    markerList.push({ latlng, title: label, description: '', color: '#4a5568', square: true });
+    updateLegend();
+    return m;
+  }
+
+  // ── Posizionamento marker ──
+  addMarker([41.908058, 12.554299], 'Villa Fassini',  'Edificio principale',   '#f6ad55', 'pianta_villa_fassini.PNG');
+  addMarker([41.908062, 12.553017], 'Ingresso',       'Ingresso principale',   '#48bb78');
+  addMarker([41.908090, 12.554047], 'Accredito',      'Accredito + Welcome Coffee', '#e53e3e');
+  addMarker([41.907563, 12.553409], 'Villino',        'Workshop — Tavoli di lavoro', '#63b3ed', 'pianta_villino.PNG');
+  addMarker([41.907871, 12.553350], 'Fiera',          'Fiera Startup, Imprese Impact, Progetti', '#9f7aea');
+  addMarker([41.907619, 12.553210], 'Buffet',         'Area buffet / Light Lunch', '#ed8936');
+
+  addParking([41.907563, 12.554203], 'Parcheggio A');
+  addParking([41.907300, 12.553098], 'Parcheggio B');
+  addParking([41.908433, 12.553634], 'Parcheggio C');
+
+  // ── Legenda ──
+  function updateLegend() {
+    document.getElementById('legend-list').innerHTML = markerList.map(m => `
+      <div class="legend-item">
+        <div class="legend-dot${m.square ? ' square' : ''}" style="background:${m.color}"></div>
+        <span>${m.title}</span>
+      </div>`).join('');
+  }
+
+  // ── Agenda → mappa ──
+  let activeSlot = null;
+  document.querySelectorAll('.agenda-slot[data-marker]').forEach(slot => {
+    slot.addEventListener('click', () => {
+      const name = slot.dataset.marker;
+      const marker = markerMap[name];
+      if (!marker) return;
+      if (activeSlot) activeSlot.classList.remove('active');
+      slot.classList.add('active');
+      activeSlot = slot;
+      map.flyTo(marker.getLatLng(), 19, { duration: 0.8 });
+      setTimeout(() => marker.openPopup(), 850);
+    });
+  });
+
+  // ── Coordinate mouse ──
+  map.on('mousemove', e => {
+    document.getElementById('coords').textContent =
+      `Lat: ${e.latlng.lat.toFixed(6)}  Lng: ${e.latlng.lng.toFixed(6)}`;
+  });
+
+  // ── Click → copia coordinate ──
+  map.on('click', e => {
+    const txt = `[${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}]`;
+    navigator.clipboard?.writeText(txt);
+    L.popup()
+      .setLatLng(e.latlng)
+      .setContent(`<div style="font-size:0.8rem;color:#a0aec0">📌 ${txt}<br><small>copiato negli appunti</small></div>`)
+      .openOn(map);
+  });
+</script>
+
+</body>
+</html>
