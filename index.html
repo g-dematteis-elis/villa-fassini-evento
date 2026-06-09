@@ -347,7 +347,7 @@
   // ── Modal pianta ──
   function openFloorPlan(title, imageSrc) {
     document.getElementById('modal-title').textContent = title;
-    document.getElementById('modal-img').src = imageSrc;
+    document.getElementById('modal-img').src = imageSrc + '?v=' + Date.now();
     document.getElementById('floor-modal').classList.add('open');
   }
   document.getElementById('modal-close').addEventListener('click', () => {
