@@ -118,33 +118,7 @@
     }
     .custom-tooltip::before { display: none; }
 
-    /* ── Hamburger (desktop only, nascosto su mobile) ── */
-    #menu-btn { display: none; }
-
-    /* ── Sheet handle (solo mobile) ── */
-    #sheet-handle {
-      display: none;
-      flex-direction: column; align-items: center;
-      padding: 10px 18px 10px; cursor: pointer; flex-shrink: 0;
-      background: #16213e;
-      border-radius: 20px 20px 0 0;
-      user-select: none;
-    }
-    .handle-pill {
-      width: 40px; height: 4px; border-radius: 2px;
-      background: rgba(255,255,255,0.25); margin-bottom: 10px;
-    }
-    .handle-row {
-      display: flex; align-items: center; justify-content: space-between; width: 100%;
-    }
-    .handle-label { font-size: 0.88rem; font-weight: 700; color: #e2e8f0; }
-    .handle-arrow {
-      font-size: 1rem; color: #63b3ed;
-      transition: transform 0.32s cubic-bezier(.4,0,.2,1);
-    }
-    #agenda.open .handle-arrow { transform: rotate(180deg); }
-
-    /* Overlay backdrop mobile */
+    /* ── Overlay backdrop mobile ── */
     #agenda-overlay {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.45); z-index: 4999;
@@ -152,13 +126,19 @@
     }
     #agenda-overlay.open { display: block; }
 
+    /* ── FAB Agenda (solo mobile) ── */
+    #agenda-fab { display: none; }
+
+    /* ── Blocco mappa quando sheet aperto ── */
+    #map-wrapper.map-locked { pointer-events: none; }
+
     /* ── Mobile ── */
     @media (max-width: 768px) {
       header { padding: 10px 14px; }
       header h1 { font-size: 0.95rem; }
       header span { font-size: 0.72rem; }
 
-      /* Bottom sheet */
+      /* Bottom sheet: completamente nascosto di default */
       #agenda {
         position: fixed;
         bottom: 0; left: 0; right: 0;
@@ -167,14 +147,21 @@
         border-top: 1px solid rgba(255,255,255,0.1);
         border-radius: 20px 20px 0 0;
         z-index: 5000;
-        transform: translateY(calc(100% - 62px));
+        overflow: hidden;
+        transform: translateY(100%);
         transition: transform 0.32s cubic-bezier(.4,0,.2,1);
         box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
       }
       #agenda.open { transform: translateY(0); }
 
-      #sheet-handle { display: flex; }
-      #agenda-header { display: none; }
+      /* Agenda header visibile come titolo sheet */
+      #agenda-header {
+        display: flex; align-items: center;
+        padding: 14px 18px 12px; flex-shrink: 0;
+      }
+
+      /* Lista scrollabile */
+      #agenda-list { overflow-y: auto; flex: 1; }
 
       /* Legenda nascosta */
       #sidebar { display: none; }
@@ -185,6 +172,32 @@
       /* Modal full screen */
       #floor-modal { padding: 0; }
       #modal-panel { border-radius: 0; max-height: 100vh; height: 100%; }
+
+      /* FAB fisso in basso */
+      #agenda-fab {
+        display: flex;
+        position: fixed;
+        bottom: 22px; left: 50%;
+        transform: translateX(-50%);
+        z-index: 6000;
+        align-items: center; gap: 8px;
+        background: rgba(15,52,96,0.96);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(99,179,237,0.45);
+        color: #fff; border-radius: 30px;
+        padding: 12px 22px;
+        font-size: 0.88rem; font-weight: 700;
+        cursor: pointer; white-space: nowrap;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.55);
+        transition: background 0.15s;
+      }
+      #agenda-fab:active { background: rgba(26,86,160,0.96); }
+      #fab-arrow {
+        font-size: 0.8rem; color: #63b3ed;
+        transition: transform 0.32s cubic-bezier(.4,0,.2,1);
+        display: inline-block;
+      }
+      #agenda-fab.open #fab-arrow { transform: rotate(180deg); }
     }
 
     /* ── Modal pianta ── */
@@ -234,13 +247,6 @@
 
   <!-- ── Agenda ── -->
   <div id="agenda">
-    <div id="sheet-handle" onclick="toggleMenu()">
-      <div class="handle-pill"></div>
-      <div class="handle-row">
-        <span class="handle-label">📋 Agenda</span>
-        <span class="handle-arrow">▲</span>
-      </div>
-    </div>
     <div id="agenda-header">
       <h2>Agenda</h2>
     </div>
@@ -371,6 +377,12 @@
 
 </div>
 
+<!-- ── FAB Agenda (mobile) ── -->
+<button id="agenda-fab" onclick="toggleMenu()">
+  <span id="fab-text">📋 Agenda</span>
+  <span id="fab-arrow">▲</span>
+</button>
+
 <!-- ── Modal pianta ── -->
 <div id="floor-modal">
   <div id="modal-panel">
@@ -491,34 +503,48 @@
       </div>`).join('');
   }
 
-  // ── Bottom sheet / menu mobile ──
+  // ── Bottom sheet / FAB (solo mobile) ──
   function isMobile() { return window.innerWidth <= 768; }
+
+  function updateFab(isOpen) {
+    const fab = document.getElementById('agenda-fab');
+    if (!fab) return;
+    document.getElementById('fab-text').textContent = isOpen ? '✕ Chiudi' : '📋 Agenda';
+    document.getElementById('fab-arrow').textContent = isOpen ? '▼' : '▲';
+    fab.classList.toggle('open', isOpen);
+  }
 
   function closeSheet() {
     document.getElementById('agenda').classList.remove('open');
     document.getElementById('agenda-overlay').classList.remove('open');
-    // Scroll in cima prima che l'animazione finisca
-    setTimeout(() => {
-      document.getElementById('agenda-list').scrollTop = 0;
-    }, 320);
-    // Riabilita interazione mappa
-    if (isMobile()) { map.dragging.enable(); map.scrollWheelZoom.enable(); map.touchZoom.enable(); }
+    // Scroll in cima dopo la fine dell'animazione
+    setTimeout(() => { document.getElementById('agenda').scrollTop = 0; }, 340);
+    // Sblocca mappa
+    document.getElementById('map-wrapper').classList.remove('map-locked');
+    map.dragging.enable();
+    map.scrollWheelZoom.enable();
+    if (map.touchZoom) map.touchZoom.enable();
+    if (map.tap) map.tap.enable();
+    updateFab(false);
   }
 
   function toggleMenu() {
-    const agenda  = document.getElementById('agenda');
-    const overlay = document.getElementById('agenda-overlay');
-    const isOpen  = agenda.classList.toggle('open');
-    overlay.classList.toggle('open', isOpen);
-    if (isOpen && isMobile()) {
-      // Blocca la mappa quando il foglio è aperto
-      map.dragging.disable(); map.scrollWheelZoom.disable(); map.touchZoom.disable();
+    const isOpen = document.getElementById('agenda').classList.toggle('open');
+    document.getElementById('agenda-overlay').classList.toggle('open', isOpen);
+    if (isOpen) {
+      // Blocca mappa
+      document.getElementById('map-wrapper').classList.add('map-locked');
+      map.dragging.disable();
+      map.scrollWheelZoom.disable();
+      if (map.touchZoom) map.touchZoom.disable();
+      if (map.tap) map.tap.disable();
     } else {
       closeSheet();
     }
+    updateFab(isOpen);
   }
 
-  // Chiudi sheet cliccando overlay
+  // Overlay → chiude sheet
   document.getElementById('agenda-overlay').addEventListener('click', closeSheet);
 
   // ── Agenda → mappa ──
