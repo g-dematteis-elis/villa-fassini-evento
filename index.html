@@ -237,12 +237,12 @@
     <div id="sheet-handle" onclick="toggleMenu()">
       <div class="handle-pill"></div>
       <div class="handle-row">
-        <span class="handle-label">📋 Programma</span>
+        <span class="handle-label">📋 Agenda</span>
         <span class="handle-arrow">▲</span>
       </div>
     </div>
     <div id="agenda-header">
-      <h2>Programma</h2>
+      <h2>Agenda</h2>
     </div>
     <div id="agenda-list">
 
@@ -400,7 +400,7 @@
     { attribution: '© OpenStreetMap contributors', maxZoom: 21 }
   );
 
-  const map = L.map('map', { center: CENTER, zoom: ZOOM, layers: [satellite], zoomControl: true });
+  const map = L.map('map', { center: CENTER, zoom: ZOOM, layers: [satellite], zoomControl: false });
 
   document.getElementById('toggle-satellite').addEventListener('change', function() {
     if (this.checked) { map.removeLayer(streets); map.addLayer(satellite); }
@@ -494,18 +494,32 @@
   // ── Bottom sheet / menu mobile ──
   function isMobile() { return window.innerWidth <= 768; }
 
+  function closeSheet() {
+    document.getElementById('agenda').classList.remove('open');
+    document.getElementById('agenda-overlay').classList.remove('open');
+    // Scroll in cima prima che l'animazione finisca
+    setTimeout(() => {
+      document.getElementById('agenda-list').scrollTop = 0;
+    }, 320);
+    // Riabilita interazione mappa
+    if (isMobile()) { map.dragging.enable(); map.scrollWheelZoom.enable(); map.touchZoom.enable(); }
+  }
+
   function toggleMenu() {
     const agenda  = document.getElementById('agenda');
     const overlay = document.getElementById('agenda-overlay');
     const isOpen  = agenda.classList.toggle('open');
     overlay.classList.toggle('open', isOpen);
+    if (isOpen && isMobile()) {
+      // Blocca la mappa quando il foglio è aperto
+      map.dragging.disable(); map.scrollWheelZoom.disable(); map.touchZoom.disable();
+    } else {
+      closeSheet();
+    }
   }
 
   // Chiudi sheet cliccando overlay
-  document.getElementById('agenda-overlay').addEventListener('click', () => {
-    document.getElementById('agenda').classList.remove('open');
-    document.getElementById('agenda-overlay').classList.remove('open');
-  });
+  document.getElementById('agenda-overlay').addEventListener('click', closeSheet);
 
   // ── Agenda → mappa ──
   let activeSlot = null;
@@ -517,11 +531,7 @@
       if (activeSlot) activeSlot.classList.remove('active');
       slot.classList.add('active');
       activeSlot = slot;
-      // Su mobile chiude il bottom sheet, poi vola al marker
-      if (isMobile()) {
-        document.getElementById('agenda').classList.remove('open');
-        document.getElementById('agenda-overlay').classList.remove('open');
-      }
+      if (isMobile()) closeSheet();
       map.flyTo(marker.getLatLng(), 19, { duration: 0.8 });
       setTimeout(() => marker.openPopup(), 850);
     });
