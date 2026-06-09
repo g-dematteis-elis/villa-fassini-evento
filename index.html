@@ -118,6 +118,69 @@
     }
     .custom-tooltip::before { display: none; }
 
+    /* ── Hamburger button (solo mobile) ── */
+    #menu-btn {
+      display: none;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff; border-radius: 8px;
+      width: 38px; height: 38px; font-size: 1.2rem;
+      cursor: pointer; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: background 0.15s;
+    }
+    #menu-btn:hover { background: rgba(255,255,255,0.18); }
+
+    /* Bottone chiudi agenda (solo mobile) */
+    #agenda-close {
+      display: none;
+      background: none; border: none; color: #a0aec0;
+      font-size: 1.3rem; cursor: pointer; padding: 2px 6px;
+      line-height: 1;
+    }
+
+    /* Overlay backdrop mobile */
+    #agenda-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5); z-index: 4999;
+    }
+    #agenda-overlay.open { display: block; }
+
+    /* ── Mobile ── */
+    @media (max-width: 768px) {
+      header { padding: 10px 14px; gap: 10px; }
+      header h1 { font-size: 0.95rem; }
+      header span { font-size: 0.72rem; }
+
+      #menu-btn { display: flex; }
+      #agenda-close { display: block; }
+
+      /* Sidebar agenda: nascosta a sinistra, slide-in */
+      #agenda {
+        position: fixed;
+        top: 0; left: -300px; bottom: 0;
+        width: 290px;
+        z-index: 5000;
+        transition: left 0.28s cubic-bezier(.4,0,.2,1);
+        box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+      }
+      #agenda.open { left: 0; }
+
+      #agenda-header {
+        display: flex; align-items: center;
+        justify-content: space-between; padding: 14px 16px 12px;
+      }
+
+      /* Legenda: nascosta su mobile */
+      #sidebar { display: none; }
+
+      /* Layer toggle: più piccolo e riposizionato */
+      #layer-toggle { top: 10px; left: 10px; padding: 6px 10px; font-size: 0.76rem; }
+
+      /* Modal: full screen su mobile */
+      #floor-modal { padding: 0; }
+      #modal-panel { border-radius: 0; max-height: 100vh; height: 100%; }
+    }
+
     /* ── Modal pianta ── */
     #floor-modal {
       display: none; position: fixed; inset: 0; z-index: 9000;
@@ -153,17 +216,23 @@
 <body>
 
 <header>
+  <button id="menu-btn" onclick="toggleMenu()" aria-label="Apri programma">☰</button>
   <div>
     <h1>Open Innovation Days — ELIS</h1>
     <span>Villa Fassini, Casal Bruciato — Roma</span>
   </div>
 </header>
 
+<div id="agenda-overlay" onclick="toggleMenu()"></div>
+
 <div class="content">
 
   <!-- ── Agenda ── -->
   <div id="agenda">
-    <div id="agenda-header"><h2>Programma</h2></div>
+    <div id="agenda-header">
+      <h2>Programma</h2>
+      <button id="agenda-close" onclick="toggleMenu()" aria-label="Chiudi">✕</button>
+    </div>
     <div id="agenda-list">
 
       <div class="agenda-slot" data-marker="Accredito">
@@ -411,6 +480,15 @@
       </div>`).join('');
   }
 
+  // ── Menu mobile ──
+  function toggleMenu() {
+    const agenda = document.getElementById('agenda');
+    const overlay = document.getElementById('agenda-overlay');
+    const isOpen = agenda.classList.toggle('open');
+    overlay.classList.toggle('open', isOpen);
+  }
+  function isMobile() { return window.innerWidth <= 768; }
+
   // ── Agenda → mappa ──
   let activeSlot = null;
   document.querySelectorAll('.agenda-slot[data-marker]').forEach(slot => {
@@ -421,6 +499,11 @@
       if (activeSlot) activeSlot.classList.remove('active');
       slot.classList.add('active');
       activeSlot = slot;
+      // Su mobile chiude la sidebar prima di volare al marker
+      if (isMobile()) {
+        document.getElementById('agenda').classList.remove('open');
+        document.getElementById('agenda-overlay').classList.remove('open');
+      }
       map.flyTo(marker.getLatLng(), 19, { duration: 0.8 });
       setTimeout(() => marker.openPopup(), 850);
     });
